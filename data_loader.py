@@ -14,28 +14,26 @@ def get_all_files(basedir, ext='.h5') :
         files = glob.glob(os.path.join(root,'*'+ext))
         for f in files :
             allfiles.append(os.path.normpath(f))
+
     return allfiles
 
-def get_all_metadata(h5_file):
+def get_all_metadata(h5, songidx):
     """
-    Récupère toutes les metadonnées d'un fichier HDF5 (donc une chanson) dans un dictionnaire
+    Récupère toutes les metadonnées d'une chanson d'un fichier HDF5 dans un dictionnaire
     """
     metadata = {}
-    h5 = hdf5_getters.open_h5_file_read(h5_file)
-    numSongs = hdf5_getters.get_num_songs(h5)
 
     getters = list(filter(lambda x: x[:4] == 'get_', hdf5_getters.__dict__.keys()))
     getters.remove("get_num_songs") # special case
     getters = np.sort(getters)
 
     for getter in getters:
-        res = hdf5_getters.__getattribute__(getter)(h5, 0)
-        if res.__class__.__name__ == 'ndarray':
-            metadata[getter[4:]] = res
-        else:
-            metadata[getter[4:]] = res
+        try:
+            res = hdf5_getters.__getattribute__(getter)(h5,songidx)
+        except AttributeError as e:
+            continue
+        metadata[getter[4:]] = res
 
-    h5.close()
     return metadata
 
 ### MAIN ###
