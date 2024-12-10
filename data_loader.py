@@ -5,8 +5,6 @@ import hdf5_getters
 import numpy as np
 import pandas as pd
 
-### Chargement des données HDF5
-
 def get_all_files(basedir, ext='.h5') :
     """
     Récupère tous les fichiers HDF5 d'un répertoire principal
@@ -24,7 +22,6 @@ def get_all_metadata(h5_file):
     """
     metadata = {}
     h5 = hdf5_getters.open_h5_file_read(h5_file)
-
     numSongs = hdf5_getters.get_num_songs(h5)
 
     getters = list(filter(lambda x: x[:4] == 'get_', hdf5_getters.__dict__.keys()))
@@ -41,12 +38,6 @@ def get_all_metadata(h5_file):
     h5.close()
     return metadata
 
-### Chargement des données utilisateurs
-
-def load_csv(file_path):
-    """Charge un fichier CSV."""
-    return pd.read_csv(file_path, sep="\t")
-
 ### MAIN ###
 if __name__ == "__main__":
     # Charger les fichiers HDF5 (Million Song Subset)
@@ -61,10 +52,3 @@ if __name__ == "__main__":
     for key, value in list(metadata.items()):  
         print(f"{key}: {value}")
     
-    # Charger les données utilisateurs
-    tasteprofilesubset_path = "./data/TasteProfileSubset/train_triplets.txt"
-    data = load_csv(tasteprofilesubset_path)
-    print(f"\nNombre total de données utilisateurs : {len(data)}")
-    
-    # Visualisation des données utilisateurs
-    print(f"Exemple de données utilisateurs:\n{data.head()}")
