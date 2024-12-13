@@ -9,6 +9,7 @@ import os
 import zipfile
 from sklearn.metrics import accuracy_score
 from collections import defaultdict
+import scipy.stats as stats
 
 
 def download(url, output_folder):
@@ -48,31 +49,31 @@ def normalize_user_playcounts(user_data):
         user_data["rating"] = user_data["play_count"].apply(lambda x: (x - min) / (max - min))
     else:
         user_data["rating"] = user_data["play_count"].apply(lambda x: 0.5)
+    get_field_info(user_data, "rating")
     return user_data
 
-def process_user_ratings(df, process):
-    df = df.drop(df[df["play_count"] < 2].index)
-    print(df)
+def process_user_ratings(df, min_count=1, process=None, n_quantiles=None):
+    df = df.drop(df[df["play_count"] < min_count].index)
+    #print(df)
 
-    if process == "percentiles":
-        return df.groupby("user_id", group_keys=False).apply(assign_quantile_ratings, n_quantiles=100)
-    if process == "deciles":
-        return df.groupby("user_id", group_keys=False).apply(assign_quantile_ratings, n_quantiles=10)
-    if process == "normalize":
-        mean, var, min, max = get_field_info(df, "play_count")
-        if min < max:
-            df["rating"] = df["play_count"].apply(lambda x: (x - min) / (max - min))
+    if process == "n_quantiles":
+        if n_quantiles == None:
+            raise ValueError(f"Value of n_quantiles must be passed with process={process}")
         else:
-            df["rating"] = df["play_count"].apply(lambda x: 0.5)
-        return df
-    if process == "normalize_per_user":
-        return df.groupby("user_id", group_keys=False).apply(normalize_user_playcounts)
-    if process == "listened_twice":
+            df = df.groupby("user_id", group_keys=False).apply(assign_quantile_ratings, n_quantiles=n_quantiles)
+    elif process == "normalize":
+        df = df.groupby("user_id", group_keys=False).apply(normalize_user_playcounts)
+    elif process == "listened_twice":
         df["rating"] = df["play_count"] >= 2
-        return df
-    if process == 0:
-        df["rating"] = df["play_count"] 
-        return df
+    elif process == None:
+        raise ValueError(f"Preprocess needed to generate ratings from play counts")
+    
+    if binary_rating:
+        mean, _, _, _ = get_field_info(df, "rating")
+        df["rating"] = df["rating"].apply(lambda x: x > mean)
+    
+    return df
+
 
 def load_user_data(path):
     print("Loading users metadata...")
@@ -81,44 +82,58 @@ def load_user_data(path):
 
     return df
 
-def get_field_info(df, field):
+def get_field_info(df, field, verbose=False):
     field_mean, field_var = df[field].mean(), df[field].var()
     field_min, field_max = df[field].min(), df[field].max()
-    print(f"Distribution de {field} : \n\tMoyenne : {field_mean} \n\tVariance : {field_var} \n\tMin : {field_min} \n\tMax : {field_max}")
+
+    if verbose:
+        print(f"Distribution de {field} : \n\tMoyenne : {field_mean} \n\tVariance : {field_var} \n\tMin : {field_min} \n\tMax : {field_max}")
 
     return field_mean, field_var, field_min, field_max
 
-def precision_recall_at_k(predictions, k, threshold):
-    user_est_true = defaultdict(list)
-    for uid, _, true_r, est, _ in predictions:
-        user_est_true[uid].append((est, true_r))
+def eval(df, model, process, n_quantiles=None):
+    if process == "n_quantiles":
+        if n_quantiles == None:
+            raise ValueError(f"Value of n_quantiles must be passed with process={process}")
+        else:
+            df = process_user_ratings(df, min_count=1, process=process, n_quantiles=n_quantiles)
+    else:
+        df = process_user_ratings(df, min_count=1, process=process)
 
-    precisions = dict()
-    recalls = dict()
-    for uid, user_ratings in user_est_true.items():
-        user_ratings.sort(key=lambda x: x[0], reverse=True)
-        n_rel = sum((true_r >= threshold) for (_, true_r) in user_ratings)
-        n_rec_k = sum((est >= threshold) for (est, _) in user_ratings[:k])
+    _, _, min, max = get_field_info(df, "rating")
 
-        n_rel_and_rec_k = sum(
-            ((true_r >= threshold) and (est >= threshold))
-            for (est, true_r) in user_ratings[:k]
-        )
+    reader = Reader(rating_scale=(min, max), sep="\t")
+    data = Dataset.load_from_df(df[["user_id", "song_id", "rating"]], reader=reader)
 
-        precisions[uid] = n_rel_and_rec_k / n_rec_k if n_rec_k != 0 else 0
-        recalls[uid] = n_rel_and_rec_k / n_rel if n_rel != 0 else 0
+    train_data, test_data = train_test_split(data, test_size=0.25)
 
-    return precisions, recalls
+    model.fit(train_data)
+    predictions = model.test(test_data)
 
-def precision_recall(model):
-    kf = KFold(n_splits=5)
-    for trainset, testset in kf.split(data):
-        model.fit(trainset)
-        predictions = model.test(testset)
-        precisions, recalls = precision_recall_at_k(predictions, k=5, threshold=2)
-        print(sum(prec for prec in precisions.values()) / len(precisions))
-        print(sum(rec for rec in recalls.values()) / len(recalls))
+    rmse = accuracy.rmse(predictions, verbose=False)
+    mae = accuracy.mae(predictions, verbose=False)
 
+    actual_ratings = [pred.r_ui for pred in predictions]
+    predicted_ratings = [pred.est for pred in predictions]
+
+    threshold = 0.5
+    actual_ratings_bin = [1 if r > threshold else 0 for r in actual_ratings]
+    predicted_ratings_bin = [1 if r > threshold else 0 for r in predicted_ratings]
+
+    for idx, pred in enumerate(predictions[:10]):
+        print(f"User: {pred.uid}, Item: {pred.iid}, Actual: {pred.r_ui}, Predicted: {pred.est:.2f}")
+        print(f"\t{actual_ratings_bin[idx]}")
+        print(f"\t{predicted_ratings_bin[idx]}")
+
+    acc = accuracy_score(actual_ratings_bin, predicted_ratings_bin)
+
+    results = {
+        "accuracy": acc,
+        "RMSE": rmse,
+        "MAE": mae
+    }
+
+    return results
 
 if __name__ == "__main__":
     #url = "http://labrosa.ee.columbia.edu/~dpwe/tmp/train_triplets.txt.zip"
@@ -133,44 +148,36 @@ if __name__ == "__main__":
 
     df = load_user_data(output_file)
     print(df)
-    get_field_info(df, "play_count")
+    get_field_info(df, "play_count", verbose=True)
 
-    df = process_user_ratings(df, process="percentiles")
-    print(df)
-    _, _, min, max = get_field_info(df, "rating")
+    preprocesses = [
+        "n_quantiles",
+        "normalize",
+        "listened_twice"]  
+    N_quantiles = [5, 10, 25, 50, 100, 200]
+    min_counts = [1, 2, 5, 10]
+    threshold = [i/10 for i in range(1, 10)]
 
-    reader = Reader(rating_scale=(min, max), sep="\t")
-    data = Dataset.load_from_df(df[["user_id", "song_id", "rating"]], reader=reader)
+    params = {
+        "preprocesses": preprocesses,
+        "N_quantiles": N_quantiles,
+        "min_counts": min_counts,
+        "threshold": threshold
+    }
 
-    train_data, test_data = train_test_split(data, test_size=0.25)
-
-    model = SVD()
-    model.fit(train_data)
-    predictions = model.test(test_data)
-
-    rmse = accuracy.rmse(predictions)
-    mae = accuracy.mae(predictions)
-
-    for pred in predictions[:10]:
-        print(f"User: {pred.uid}, Item: {pred.iid}, Actual: {pred.r_ui}, Predicted: {pred.est:.2f}")
-
-    actual_ratings = [pred.r_ui for pred in predictions]
-    predicted_ratings = [pred.est for pred in predictions]
-    actual_ratings_int = [int(r) for r in actual_ratings]
-    predicted_ratings_int = [int(r) for r in predicted_ratings]
-
-    binary_accuracy = accuracy_score(actual_ratings_int, predicted_ratings_int)
-    print(f"Binary Classification Accuracy: {binary_accuracy * 100:.2f}%")
-
-    plt.hist(actual_ratings, bins=100, alpha=0.5, label="Ratings réels", density=True)
-    plt.hist(predicted_ratings, bins=100, alpha=0.5, label="Ratings prédits", density=True)
-    plt.hist(df["rating"], bins=100, alpha=0.5, label="Ratings dataset", density=True)
-    plt.legend(loc="upper right")
-    plt.xlabel("Ratings")
-    plt.ylabel("Fréquence")
-    plt.title("Distribution des Ratings Réels vs Prédits")
-    plt.show()
-        
-    #results = cross_validate(model, data, measures=["RMSE", "MAE"], cv=5, verbose=True)
-
+    binary_rating=True
     
+    results = {}
+    
+    for process in preprocesses:
+        model = SVD()
+        print(f"Preprocessing method used : {process}")
+        if process == "n_quantiles":
+            for n_quantiles in N_quantiles:
+                print(f"\tNumber of quantiles : {n_quantiles}")
+                results[f"{n_quantiles}_quantiles"] = eval(df, model, process, n_quantiles)
+        else:
+            results[process] = eval(df, model, process)
+
+    results_df = pd.DataFrame(results)
+    print(results_df)
