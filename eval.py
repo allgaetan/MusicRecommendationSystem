@@ -1,7 +1,7 @@
 from data_loader import download, extract_triplets, load_user_data
 from preprocessing import get_field_info, assign_quantile_ratings, normalize_user_playcounts, process_user_ratings
 
-from surprise import Dataset, Reader, accuracy, SVD
+from surprise import Dataset, Reader, accuracy, SVD, KNNBasic
 from surprise.model_selection import train_test_split
 from sklearn.metrics import precision_score, recall_score, accuracy_score
 import pandas as pd

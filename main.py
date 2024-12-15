@@ -3,7 +3,6 @@ from preprocessing import get_field_info, assign_quantile_ratings, normalize_use
 from eval import eval, eval_preprocess, eval_n_triplets, eval_threshold
 
 import os
-from surprise import SVD
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
