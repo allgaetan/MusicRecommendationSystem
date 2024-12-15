@@ -1,4 +1,4 @@
-# MusicRecommendationSystem
+# GIF-7005 Project : Music Recommendation System
 
 Group members : Gaétan Allaire, Ramzi Khezzar, Romain Desmidt, François Duguay-Giguère, Logan Leconte
 
@@ -38,9 +38,10 @@ The model is evaluated using sklearn metrics : precision, recall, and accuracy.
 
 ## Project Structure
 
+- `main.py`: The main script to run the project.
 - `preprocessing.py`: Includes functions for data preprocessing and rating generation.
 - `eval.py`: Contains functions for evaluating the collaborative filtering model.
-- `main.py`: The main script to run the project.
+- `data_loader.py`: Contains functions to download, extract data and extract samples of the full data.
 - `README.md`: This file.
 - `requirements.txt`: Lists the required Python libraries.
 
