@@ -1,6 +1,6 @@
 from data_loader import download, extract_triplets, load_user_data
 from preprocessing import get_field_info, assign_quantile_ratings, normalize_user_playcounts, process_user_ratings
-from eval import eval
+from eval import eval, eval_preprocess, eval_n_triplets, eval_threshold
 
 import os
 from surprise import SVD
@@ -9,82 +9,109 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 if __name__ == "__main__":
+    ###################################
+    # DATA IMPORT
+    ###################################
     data_folder = "./data/TasteProfileSubset/"
 
     # Download the data if not already dowloaded
-    alreadyDowloaded = True
+    alreadyDowloaded = True # Change to false when running for the first time
     if not alreadyDowloaded:
         url = "http://labrosa.ee.columbia.edu/~dpwe/tmp/train_triplets.txt.zip"
         os.makedirs(data_folder, exist_ok=True)
         zip_path = download(url, data_folder)
 
     # Parameters 
-    N_triplets = [100, 500, 1000, 5000, 10000, 50000, 100000]
+    N_triplets = [100, 300, 500, 1000, 3000, 5000, 10000, 30000, 50000, 100000, 300000, 500000, 1000000]
     preprocesses = [
         "n_quantiles",
         "normalize",
         "listened_twice"]  
     N_quantiles = [5, 10, 50, 100]
-    min_counts = [1, 2, 5, 10]
-    threshold = [i/10 for i in range(1, 10)]
+    thresholds = [i/10 for i in range(1, 10)]
 
     params = {
         "N_triplets": N_triplets,
         "preprocesses": preprocesses,
         "N_quantiles": N_quantiles,
-        "min_counts": min_counts,
-        "threshold": threshold
+        "threshold": thresholds
     }
-    """
-    # Evaluation by sample size
-    sample_size_eval = {}
-    for n_triplets in N_triplets:
-        print(f"Evaluation with {n_triplets} triplets")
 
-        # Extract n triplets from the data in a file
-        extracted_file = os.path.join(data_folder, "train_triplets.txt")
-        output_file = os.path.join(data_folder, f"train_{n_triplets}_triplets.txt")
-        extract_triplets(extracted_file, output_file, n_triplets)
+    # Extract n triplets from the data in a file
+    n_triplets = 10000
+    extracted_file = os.path.join(data_folder, "train_triplets.txt")
+    output_file = os.path.join(data_folder, f"train_{n_triplets}_triplets.txt")
+    extract_triplets(extracted_file, output_file, n_triplets)
 
-        # Load users data from the file
-        df = load_user_data(output_file)
-        print(df)
-        get_field_info(df, "play_count", verbose=True)
-        
-        # Evaluation by type of preprocessing
-        results = {}
-        for process in preprocesses:
-            model = SVD()
-            print(f"Preprocessing method used : {process}")
-            if process == "n_quantiles":
-                for n_quantiles in N_quantiles:
-                    print(f"\tNumber of quantiles : {n_quantiles}")
-                    results[f"{n_quantiles}_quantiles"] = eval(df, model, process, n_quantiles=n_quantiles)
-            else:
-                results[process] = eval(df, model, process)
+    # Load users data from the file
+    df = load_user_data(output_file)
+    print(df)
+    get_field_info(df, "play_count", verbose=True)
+    
 
-        results_df = pd.DataFrame(results)
-        print(results_df)
+    ###################################
+    # EVALUATION
+    ###################################
+    evaluate_preprocess = True
+    evaluate_thresholds = True
+    evaluate_n_triplets = True
+    show_plots = True
 
-        best_acc = 0
-        best_process = None
-        for process, stats in results.items():
-            if stats["accuracy"] >= best_acc:
-                best_acc = stats["accuracy"]
-                best_process = process
-        
-        sample_size_eval[n_triplets] = [best_acc, best_process]
+    # Evaluation by type of preprocessing
+    if evaluate_preprocess:
+        print(f"Evaluation by type of preprocessing :")
+        preprocesses_evaluation = eval_preprocess(df, preprocesses, N_quantiles)
+        preprocesses_evaluation = pd.DataFrame(preprocesses_evaluation)
+        print(preprocesses_evaluation)
 
-    print(sample_size_eval)
-    """
-    sample_size_eval = {100: [0.8, '100_quantiles'], 500: [0.76, 'normalize'], 1000: [0.752, 'normalize'], 5000: [0.7088, 'normalize'], 10000: [0.7488, 'normalize'], 50000: [0.76552, 'normalize'], 100000: [0.75008, 'normalize']}
-    best_acc = []
-    for (key, value) in sample_size_eval.items():
-        best_acc.append(value[0])
+    # Evaluation by decision threshold
+    if evaluate_thresholds:
+        print(f"Evaluation by decision threshold :")
+        thresholds_evaluation = eval_threshold(df, thresholds)
+        precision = []
+        recall = []
+        accuracy = []
+        for key, value in thresholds_evaluation.items():
+            precision.append(value["precision"])
+            recall.append(value["recall"])
+            accuracy.append(value["accuracy"])
 
-    plt.figure()
-    plt.plot(np.log10(N_triplets), best_acc)
-    for (key, value) in sample_size_eval.items():
-        plt.scatter(np.log10(key), value[0], label=f"{value[1]} preprocessing")
-    plt.legend()
-    plt.show()
+        thresholds_evaluation = pd.DataFrame(thresholds_evaluation)
+        print(thresholds_evaluation)
+
+        if show_plots:
+            plt.figure()
+            plt.title("Scores by decision threshold")
+            plt.plot(thresholds, precision, label="Precision")
+            plt.plot(thresholds, recall, label="Recall")
+            plt.plot(thresholds, accuracy, label="Accuracy")
+            plt.xlabel("Decision threshold")
+            plt.ylabel("Score")
+            plt.legend()
+            plt.show()
+
+    # Evaluation by number of triplets used
+    if evaluate_n_triplets:
+        print(f"Evaluation by number of triplets used :")
+        n_triplets_evaluation = eval_n_triplets(data_folder, N_triplets)
+        precision = []
+        recall = []
+        accuracy = []
+        for key, value in n_triplets_evaluation.items():
+            precision.append(value["precision"])
+            recall.append(value["recall"])
+            accuracy.append(value["accuracy"])
+
+        n_triplets_evaluation = pd.DataFrame(n_triplets_evaluation)
+        print(n_triplets_evaluation)
+
+        if show_plots:
+            plt.figure()
+            plt.title("Scores by number of triplets used")
+            plt.plot(np.log10(N_triplets), precision, label="Precision")
+            plt.plot(np.log10(N_triplets), recall, label="Recall")
+            plt.plot(np.log10(N_triplets), accuracy, label="Accuracy")
+            plt.xlabel("log(n_triplets)")
+            plt.ylabel("Score")
+            plt.legend()
+            plt.show()
