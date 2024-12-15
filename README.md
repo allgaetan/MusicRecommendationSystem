@@ -28,7 +28,7 @@ One of the main challenge is to use the play counts given in the dataset and gen
 The project includes various data preprocessing techniques to generate user ratings, including:
     - Quantile-based ratings
     - Normalized play counts
-    - Binary ratings based on listening frequency
+    - Naive rating if the music has been listened at least twice
 
 3. **Collaborative Filtering:**
 The project uses the SVD algorithm from the Surprise library to train a collaborative filtering model.
