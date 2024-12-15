@@ -74,7 +74,8 @@ def eval_preprocess(df, preprocesses, N_quantiles):
     results = {}
     for process in preprocesses:
         print(f"\tEvaluation using {process} preprocessing")
-        model = SVD()
+        #model = SVD()
+        model = KNNBasic()
         if process == "n_quantiles":
             for n_quantiles in N_quantiles:
                 print(f"\t\tNumber of quantiles : {n_quantiles}")
@@ -99,7 +100,8 @@ def eval_n_triplets(path, N_triplets):
         output_file = os.path.join(path, f"train_{n_triplets}_triplets.txt")
         extract_triplets(extracted_file, output_file, n_triplets)
         df = load_user_data(output_file)
-        model = SVD()
+        #model = SVD()
+        model = KNNBasic()
         results[n_triplets] = eval(df, model, "normalize")
 
     return results
@@ -115,7 +117,8 @@ def eval_threshold(df, thresholds):
     results = {}
     for threshold in thresholds:
         print(f"\tEvaluation with a decision threshold of {threshold}")
-        model = SVD()
+        #model = SVD()
+        model = KNNBasic()
         results[threshold] =  eval(df, model, "normalize", threshold=threshold)
 
     return results
