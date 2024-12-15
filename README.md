@@ -18,7 +18,15 @@ This project explores a subset of the Taste Profile dataset and implements a col
 
 ## Usage
 
-Run the "main.py" Python script. The script will perform the following :
+Run the "main.py" Python script. 
+You can set *alreadyDowloaded* to **False** if it's the first time using the script.
+The evaluation section contains 4 boolean parameters to customize the evaluation :
+- *evaluate_preprocess* : evaluate by preprocessing methods
+- *evaluate_thresholds* : evaluate by decision threshold
+- *evaluate_n_triplets* : evaluate by number of triplets used
+- *show_plots* : show plots with the results
+
+The main script will perform the following :
 
 1. **Download the Taste Profile Subset:**
 If the dataset is not already downloaded, the script will automatically download and extract it. The zip file is 500Mo in size so it may take some time to dowload and extract.
