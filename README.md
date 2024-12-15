@@ -1,4 +1,4 @@
-# GIF-7005 Project : Musc Recommendation System
+# GIF-7005 Project : Music Recommendation System
 
 Group members : Gaétan Allaire, Ramzi Khezzar, Romain Desmidt, François Duguay-Giguère, Logan Leconte
 
