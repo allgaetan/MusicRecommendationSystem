@@ -52,4 +52,5 @@ The model is evaluated using sklearn metrics : precision, recall, and accuracy.
 - `data_loader.py`: Contains functions to download, extract data and extract samples of the full data.
 - `README.md`: This file.
 - `requirements.txt`: Lists the required Python libraries.
+- `results/` : Results from the evaluation (the ones used on the poster). They were saved manually so running the evaluation won't overwrite the files. There are results for Surprise's SVD and KNNBasic models.
 
